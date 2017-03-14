@@ -1,0 +1,48 @@
+1. consul master
+master01:
+    docker rm -f consul && docker run -d --net=host --name=consul dockerhub.hjidc.com/consul:0.6.4 -server -advertise 10.10.70.182 -bootstrap-expect 3 -recursor 10.10.80.165 -recursor 10.10.80.168
+master02:
+    docker rm -f consul && docker run -d --net=host --name=consul dockerhub.hjidc.com/consul:0.6.4 -server -advertise 10.10.70.147 -recursor 10.10.80.165 -recursor 10.10.80.168 -retry-join 10.10.70.182 -retry-join 10.10.70.146
+master03:
+    rm -f consul && docker run -d --net=host --name=consul dockerhub.hjidc.com/consul:0.6.4 -server -advertise 10.10.70.146 -recursor 10.10.80.165 -recursor 10.10.80.168 -retry-join 10.10.70.182 -retry-join 10.10.70.147
+
+2. consul slave
+node01:
+    docker rm -f consul
+    docker run -d --net=host --name=consul --restart=always dockerhub.hjidc.com/consul:0.6.4 -advertise `hostname -I |cut -d ' ' -f1` -recursor 10.10.80.165 -recursor 10.10.80.168 -retry-join 10.10.70.182 -retry-join 10.10.70.146 -retry-join 10.10.70.147
+
+3. consul template
+    consul template deploy from marathon
+    marathon config json file as follow:
+
+
+{
+  "id": "/mesos-consul",
+  "cmd": null,
+  "cpus": 1,
+  "mem": 1024,
+  "disk": 0,
+  "instances": 1,
+  "container": {
+    "type": "DOCKER",
+    "volumes": [],
+    "docker": {
+      "image": "dockerhub.hjidc.com/mesos-consul:v1.0.0",
+      "network": "BRIDGE",
+      "portMappings": null,
+      "privileged": false,
+      "parameters": [],
+      "forcePullImage": false
+    }
+  },
+  "portDefinitions": [
+    {
+      "port": 10000,
+      "protocol": "tcp",
+      "labels": {}
+    }
+  ],
+  "args": [
+    "--zk=zk://zk1-wx-base.intra.yeshj.com:2181,zk2-wx-base.intra.yeshj.com:2181,zk3-wx-base.intra.yeshj.com:2181,zk4-wx-base.intra.yeshj.com:2181,zk5-wx-base.intra.yeshj.com:2181/mesos"
+  ]
+}
