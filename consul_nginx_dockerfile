@@ -1,0 +1,45 @@
+FROM dockerhub.hjidc.com/hj-nginx:alpine
+#Install Curl
+#RUN apt-get update -qq && apt-get -y install unzip
+RUN apk --update add --no-cache unzip
+#Link to Consul Template Binary
+ADD https://releases.hashicorp.com/consul-template/0.15.0/consul-template_0.15.0_linux_amd64.zip /tmp/consul-template.zip
+#COPY consul-template_0.15.0_linux_amd64.zip /tmp/consul-template.zip
+#Install Consul Template
+RUN cd /usr/sbin && unzip /tmp/consul-template.zip && chmod +x /usr/sbin/consul-template && rm /tmp/consul-template.zip
+#Setup Consul Template Files
+RUN mkdir /etc/consul-templates
+
+#COPY nginx_template.conf /etc/consul-templates/nginx.conf
+
+ENV CT_FILE /etc/consul-templates/nginx.conf
+#Setup Nginx File
+ENV NX_FILE /etc/nginx/conf.d/app.conf
+#Default Variables
+ENV SERVICE consul-8500
+ENV CONTAINER_PORT 8500
+
+ENV LIMIT_AFTER 10240k
+ENV LIMIT_RATE 10240k
+
+VOLUME ["/log/nginx"]
+
+# Command will
+# 1. Write Consul Template File
+# 2. Start Nginx
+# 3. Start Consul Template
+CMD echo "upstream app { {{range service \"$SERVICE\"}} \ 
+server {{.Address}}:$CONTAINER_PORT; \
+{{else}}server 127.0.0.1:65535;{{end}} \ 
+} \ 
+server { \ 
+listen 80 default_server; \ 
+location / { \ 
+limit_rate_after $LIMIT_AFTER; limit_rate $LIMIT_RATE; \
+proxy_pass http://app; \
+} \
+}" > $CT_FILE; \
+nginx -c /etc/nginx/nginx.conf \
+& CONSUL_TEMPLATE_LOG=debug consul-template \
+-consul=$HOST:8500 \
+-template "$CT_FILE:$NX_FILE:nginx -s reload"
